@@ -1,0 +1,6 @@
+# 核心依赖（尽量精简）
+jieba>=0.42.1       # 中文分词
+PyYAML>=6.0         # 配置文件解析
+requests>=2.28.0    # Ollama HTTP API（可选，不启用 sentiment 则不需要）
+
+# 注：HTTP 服务器、SVG 渲染、CSV 解析均使用 Python 标准库，无需额外依赖

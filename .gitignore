@@ -1,0 +1,27 @@
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+.venv
+venv/
+env/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+
+# 数据与输出（本地不提交）
+data/
+output/*.json
+output/*.svg
+
+# 配置（含敏感信息）
+config.yaml
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/

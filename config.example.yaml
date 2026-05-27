@@ -1,0 +1,50 @@
+# ── 输入 ──────────────────────────────────────────────
+input:
+  path: "data/chat.txt"      # 聊天记录文件路径
+  format: "txt"              # txt | csv
+  encoding: "utf-8"          # 文件编码，如有乱码可改 gbk / utf-8-sig
+
+# ── 分词 ──────────────────────────────────────────────
+segmenter:
+  min_word_length: 2         # 最短词长（过滤单字）
+  top_n: 200                 # 保留频率前 N 的词
+  extra_stopwords: []        # 额外停用词列表，如 ["嗯", "哦"]
+  user_dict: null            # 自定义词典路径，如 "data/mydict.txt"
+
+# ── 情感筛选（可选，需本地 Ollama） ──────────────────────
+sentiment:
+  enabled: false
+  provider: "ollama"
+  model: "qwen2:7b"          # 推荐轻量模型：qwen2:1.5b / phi3
+  base_url: "http://localhost:11434"
+  filter_negative: true      # 过滤负面词汇
+  batch_size: 50             # 每批发送词数量
+
+# ── 词表输出 ──────────────────────────────────────────
+wordlist:
+  output_path: "output/wordlist.json"
+  top_n: 100                 # 最终词表保留词数
+
+# ── SVG 渲染 ──────────────────────────────────────────
+renderer:
+  output_path: "output/wordart.svg"
+  width: 800
+  height: 600
+  max_font_size: 80
+  min_font_size: 12
+  font_family: "PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif"
+  # 6 色方案，可自定义（支持 hex / CSS 颜色名）
+  colors:
+    - "#2C3E50"
+    - "#E74C3C"
+    - "#3498DB"
+    - "#27AE60"
+    - "#F39C12"
+    - "#9B59B6"
+  background: "#FAFAFA"
+
+# ── HTTP 服务（供树莓派拉取） ─────────────────────────
+server:
+  host: "0.0.0.0"
+  port: 8765
+  output_dir: "output"
