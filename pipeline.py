@@ -30,6 +30,19 @@ from pathlib import Path
 from typing import List, Optional
 
 
+def _apply_defaults(cfg: dict) -> dict:
+    """为缺省字段填充默认值（config 文件与无 config 两种路径共用）。"""
+    cfg.setdefault("input", {})
+    cfg["input"].setdefault("format", "txt")
+    cfg["input"].setdefault("encoding", "utf-8")
+    cfg.setdefault("segmenter", {})
+    cfg.setdefault("sentiment", {"enabled": False})
+    cfg.setdefault("wordlist", {})
+    cfg.setdefault("renderer", {})
+    cfg.setdefault("server", {})
+    return cfg
+
+
 def load_config(path: str) -> dict:
     try:
         import yaml  # type: ignore
@@ -40,16 +53,7 @@ def load_config(path: str) -> dict:
     with open(path, encoding="utf-8") as f:
         cfg = yaml.safe_load(f) or {}
 
-    # 设置默认值
-    cfg.setdefault("input", {})
-    cfg["input"].setdefault("format", "txt")
-    cfg["input"].setdefault("encoding", "utf-8")
-    cfg.setdefault("segmenter", {})
-    cfg.setdefault("sentiment", {"enabled": False})
-    cfg.setdefault("wordlist", {})
-    cfg.setdefault("renderer", {})
-    cfg.setdefault("server", {})
-    return cfg
+    return _apply_defaults(cfg)
 
 
 # ── Step 1: 解析 ─────────────────────────────────────────────────────────────
@@ -219,7 +223,23 @@ def main():
     )
     parser.add_argument(
         "--config", "-c", default="config.yaml",
-        help="配置文件路径（默认 config.yaml）",
+        help="配置文件路径（默认 config.yaml；不存在且提供了 --input 时使用内置默认值）",
+    )
+    parser.add_argument(
+        "--input", "-i",
+        help="聊天记录文件路径，覆盖 config 中的 input.path（可直接生成，无需 config）",
+    )
+    parser.add_argument(
+        "--format", "-f", choices=["txt", "csv"],
+        help="输入格式，覆盖 config 中的 input.format",
+    )
+    parser.add_argument(
+        "--output-dir", "-o",
+        help="输出目录，覆盖 wordlist.json / wordart.svg 的输出路径",
+    )
+    parser.add_argument(
+        "--no-sentiment", action="store_true",
+        help="强制关闭情感筛选（等价于 --skip sentiment）",
     )
     parser.add_argument(
         "--step", "-s", nargs="+",
@@ -234,15 +254,48 @@ def main():
 
     args = parser.parse_args()
 
-    if not Path(args.config).exists():
+    # 加载配置：有 config 文件则读，否则在提供 --input 时用内置默认值
+    if Path(args.config).exists():
+        cfg = load_config(args.config)
+    elif args.input:
+        print(f"[pipeline] 未找到配置文件 {args.config}，使用内置默认值（仅需 --input）")
+        cfg = _apply_defaults({})
+    else:
         print(f"❌ 配置文件不存在：{args.config}")
-        print("   请复制 config.example.yaml → config.yaml 并按需修改")
+        print("   请复制 config.example.yaml → config.yaml 并按需修改，")
+        print("   或直接指定输入文件：python pipeline.py --input data/chat.txt")
         sys.exit(1)
 
-    cfg = load_config(args.config)
+    # 应用命令行覆盖
+    if args.input:
+        cfg["input"]["path"] = args.input
+    if args.format:
+        cfg["input"]["format"] = args.format
+    if args.output_dir:
+        out = Path(args.output_dir)
+        cfg["wordlist"]["output_path"] = str(out / "wordlist.json")
+        cfg["renderer"]["output_path"] = str(out / "wordart.svg")
+        cfg["server"]["output_dir"] = str(out)
+    if args.no_sentiment:
+        cfg["sentiment"]["enabled"] = False
+
+    skip = list(args.skip or [])
+    if args.no_sentiment and "sentiment" not in skip:
+        skip.append("sentiment")
+
+    # 友好校验：将要解析却找不到输入文件时，提前给出清晰提示（而非抛栈）
+    active = args.step or ["parse", "segment", "sentiment", "wordlist", "render"]
+    if "parse" in active and "parse" not in skip:
+        in_path = cfg["input"].get("path")
+        if not in_path:
+            print("❌ 未指定输入文件，请用 --input 指定，或在 config 的 input.path 中设置")
+            sys.exit(1)
+        if not Path(in_path).exists():
+            print(f"❌ 输入文件不存在：{in_path}")
+            sys.exit(1)
 
     try:
-        run_pipeline(cfg, steps=args.step, skip=args.skip)
+        run_pipeline(cfg, steps=args.step, skip=skip or None)
     except KeyboardInterrupt:
         print("\n[pipeline] 已中断")
     except Exception as e:

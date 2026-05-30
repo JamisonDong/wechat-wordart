@@ -104,15 +104,26 @@ class SVGRenderer:
         # 使用平方根缩放，视觉上更均匀
         return self.min_font_size + (self.max_font_size - self.min_font_size) * math.sqrt(weight)
 
-    @staticmethod
-    def _spiral(step: int, a: float = 2.0, b: float = 0.3) -> Tuple[float, float]:
+    def _spiral_offsets(self, step_px: float = 5.0, loop_spacing: float = 6.0):
         """
-        阿基米德螺旋线：r = a + b*θ
-        返回相对中心的偏移量 (dx, dy)。
+        阿基米德螺旋线 r = b*θ，按弧长自适应采样、扫满整个画布。
+
+        - loop_spacing: 相邻两圈的径向间距（px），越小词排得越密
+        - step_px:      同一圈上相邻候选点的弧长间距（px），越小采样越细
+
+        先 yield 画布正中心 (0,0)，再沿螺旋向外，直到半径超过画布对角线半长。
+        逐点 yield 相对中心的偏移 (dx, dy)，迭代次数有上界，不会无限循环。
         """
-        theta = step * 0.35  # 每步转角（弧度）
-        r = a + b * theta
-        return r * math.cos(theta), r * math.sin(theta)
+        max_r = math.hypot(self.width, self.height) / 2.0 + 10.0
+        b = loop_spacing / (2.0 * math.pi)  # r = b*θ → 每圈径向增长 loop_spacing
+        yield 0.0, 0.0                       # 最大的词优先落在正中心
+        theta = step_px / max(b, 1e-6)       # 从一个非零半径起步，避免中心拥挤
+        while True:
+            r = b * theta
+            if r > max_r:
+                return
+            yield r * math.cos(theta), r * math.sin(theta)
+            theta += step_px / max(r, step_px)
 
     # ── 主渲染方法 ────────────────────────────────────────────────────────────
 
@@ -133,6 +144,7 @@ class SVGRenderer:
         cx, cy = self.width / 2.0, self.height / 2.0
         placed: List[_Box] = []
         elements: List[str] = []
+        skipped = 0
 
         for idx, item in enumerate(words):
             word = html.escape(item["word"])
@@ -156,10 +168,9 @@ class SVGRenderer:
             else:
                 rotated_w, rotated_h = tw, th
 
-            # 螺旋尝试放置
+            # 沿螺旋尝试放置
             placed_ok = False
-            for step in range(2000):
-                dx, dy = self._spiral(step)
+            for dx, dy in self._spiral_offsets():
                 x, y = cx + dx, cy + dy
                 box = _Box(x, y, rotated_w, rotated_h)
 
@@ -188,9 +199,8 @@ class SVGRenderer:
                 break
 
             if not placed_ok:
-                # 超出布局空间，截断输出（常见于词表过大）
-                print(f"[renderer] ⚠ 无法放置词 '{item['word']}'（布局已满），已跳过后续 {len(words)-idx} 个词")
-                break
+                # 当前词在画布内找不到不重叠的位置，跳过它继续尝试更小的词
+                skipped += 1
 
         svg_lines = [
             '<?xml version="1.0" encoding="UTF-8"?>',
@@ -209,8 +219,11 @@ class SVGRenderer:
         with open(out, "w", encoding="utf-8") as f:
             f.write(svg_content)
 
-        print(
+        msg = (
             f"[renderer] SVG 已写入 {output_path}，"
             f"成功放置 {len(elements)}/{len(words)} 个词"
         )
+        if skipped:
+            msg += f"（{skipped} 个词因空间不足未放置，可增大画布或调小字号）"
+        print(msg)
         return svg_content

@@ -38,6 +38,24 @@ http://0.0.0.0:8765  ← 树莓派拉取
 
 ## 快速开始
 
+### 0. 零配置体验（仓库自带示例聊天数据）
+
+装好依赖后，一行命令即可生成词画，无需任何配置：
+
+```bash
+pip install -r requirements.txt
+python pipeline.py --input data/sample_chat.txt --output-dir output
+# → output/wordlist.json + output/wordart.svg
+```
+
+用浏览器打开 `output/wordart.svg` 即可查看效果。换成你自己的聊天记录只需替换 `--input` 路径。
+
+> 推荐使用虚拟环境（Homebrew 等"外部托管"的 Python 会拒绝全局 pip 安装）：
+> ```bash
+> python3 -m venv .venv && source .venv/bin/activate
+> pip install -r requirements.txt
+> ```
+
 ### 1. 安装依赖
 
 ```bash
@@ -90,6 +108,24 @@ python pipeline.py -c config.yaml --step render
 
 # 跳过情感筛选
 python pipeline.py -c config.yaml --skip sentiment
+```
+
+### 命令行覆盖参数（可免改 config 直接运行）
+
+| 参数 | 说明 |
+|------|------|
+| `--input, -i` | 聊天记录文件路径，覆盖 `input.path`；提供后无需 config.yaml |
+| `--format, -f` | 输入格式 `txt`/`csv`，覆盖 `input.format` |
+| `--output-dir, -o` | 输出目录，自动设置 wordlist.json / wordart.svg 路径 |
+| `--no-sentiment` | 强制关闭情感筛选 |
+| `--step, -s` | 只运行指定步骤 |
+| `--skip` | 跳过指定步骤 |
+
+## 测试
+
+```bash
+python tests/test_pipeline.py   # 纯标准库冒烟/回归测试，无需 pytest
+# 或： pytest tests/
 ```
 
 ---

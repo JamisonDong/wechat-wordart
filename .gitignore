@@ -11,8 +11,9 @@ build/
 .pytest_cache/
 .mypy_cache/
 
-# 数据与输出（本地不提交）
-data/
+# 数据与输出（私有聊天记录不提交，但保留随仓库分发的示例）
+data/*
+!data/sample_chat.txt
 output/*.json
 output/*.svg
 
