@@ -16,6 +16,8 @@ data/*
 !data/sample_chat.txt
 output/*.json
 output/*.svg
+output/*.bmp
+output/*.png
 
 # 配置（含敏感信息）
 config.yaml

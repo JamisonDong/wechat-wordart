@@ -39,6 +39,14 @@ def _apply_defaults(cfg: dict) -> dict:
     cfg.setdefault("sentiment", {"enabled": False})
     cfg.setdefault("wordlist", {})
     cfg.setdefault("renderer", {})
+    cfg.setdefault("eink", {})
+    # eink 默认值：适配主流 7.5寸 800x480，同时兼容 4.2寸 400x300 通过 config 覆盖
+    cfg["eink"].setdefault("enabled", True)
+    cfg["eink"].setdefault("width", 800)
+    cfg["eink"].setdefault("height", 480)
+    cfg["eink"].setdefault("output_path", "output/eink.bmp")
+    cfg["eink"].setdefault("max_font_size", 72)
+    cfg["eink"].setdefault("min_font_size", 14)
     cfg.setdefault("server", {})
     return cfg
 
@@ -135,6 +143,29 @@ def step_render(wordlist: List[dict], cfg: dict) -> str:
     )
 
 
+# ── Step 5b: 渲染 E-ink 位图 ────────────────────────────────────────────────
+
+def step_eink(wordlist: List[dict], cfg: dict) -> str:
+    """渲染 1-bit 墨水屏位图（供 ESP32 直刷）。"""
+    eink_cfg = cfg.get("eink", {})
+    if not eink_cfg.get("enabled", True):
+        print("[pipeline] E-ink 渲染已禁用，跳过")
+        return ""
+
+    try:
+        from wechat_wordart.renderer import EinkRenderer
+    except ImportError as e:
+        print(f"[pipeline] ⚠ 跳过 eink 渲染：{e}")
+        print("    请安装 Pillow：pip install Pillow")
+        return ""
+
+    renderer = EinkRenderer(config=eink_cfg)
+    return renderer.render(
+        wordlist=wordlist,
+        output_path=eink_cfg.get("output_path", "output/eink.bmp"),
+    )
+
+
 # ── Step 6: 启动服务 ─────────────────────────────────────────────────────────
 
 def step_serve(cfg: dict):
@@ -153,7 +184,7 @@ def step_serve(cfg: dict):
 # ── 主程序 ───────────────────────────────────────────────────────────────────
 
 def run_pipeline(cfg: dict, steps: Optional[List[str]] = None, skip: Optional[List[str]] = None):
-    all_steps = ["parse", "segment", "sentiment", "wordlist", "render"]
+    all_steps = ["parse", "segment", "sentiment", "wordlist", "render", "eink"]
     active = steps if steps else all_steps
     skipped = set(skip or [])
 
@@ -207,6 +238,17 @@ def run_pipeline(cfg: dict, steps: Optional[List[str]] = None, skip: Optional[Li
                     raise RuntimeError("render 步骤需要先运行 wordlist 或有已有 wordlist.json")
             step_render(wordlist, cfg)
 
+        elif step == "eink":
+            if not wordlist:
+                wl_path = cfg.get("wordlist", {}).get("output_path", "output/wordlist.json")
+                if Path(wl_path).exists():
+                    with open(wl_path, encoding="utf-8") as f:
+                        wordlist = json.load(f)
+                    print(f"[pipeline] ℹ  从 {wl_path} 加载词表")
+                else:
+                    raise RuntimeError("eink 步骤需要先运行 wordlist 或有已有 wordlist.json")
+            step_eink(wordlist, cfg)
+
         elif step == "serve":
             step_serve(cfg)
 
@@ -243,12 +285,12 @@ def main():
     )
     parser.add_argument(
         "--step", "-s", nargs="+",
-        choices=["parse", "segment", "sentiment", "wordlist", "render", "serve"],
+        choices=["parse", "segment", "sentiment", "wordlist", "render", "eink", "serve"],
         help="只运行指定步骤（可多选）",
     )
     parser.add_argument(
         "--skip", nargs="+",
-        choices=["parse", "segment", "sentiment", "wordlist", "render"],
+        choices=["parse", "segment", "sentiment", "wordlist", "render", "eink"],
         help="跳过指定步骤",
     )
 
@@ -275,6 +317,7 @@ def main():
         out = Path(args.output_dir)
         cfg["wordlist"]["output_path"] = str(out / "wordlist.json")
         cfg["renderer"]["output_path"] = str(out / "wordart.svg")
+        cfg["eink"]["output_path"] = str(out / "eink.bmp")
         cfg["server"]["output_dir"] = str(out)
     if args.no_sentiment:
         cfg["sentiment"]["enabled"] = False
@@ -284,7 +327,7 @@ def main():
         skip.append("sentiment")
 
     # 友好校验：将要解析却找不到输入文件时，提前给出清晰提示（而非抛栈）
-    active = args.step or ["parse", "segment", "sentiment", "wordlist", "render"]
+    active = args.step or ["parse", "segment", "sentiment", "wordlist", "render", "eink"]
     if "parse" in active and "parse" not in skip:
         in_path = cfg["input"].get("path")
         if not in_path:

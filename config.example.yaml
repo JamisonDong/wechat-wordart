@@ -43,7 +43,20 @@ renderer:
     - "#9B59B6"
   background: "#FAFAFA"
 
-# ── HTTP 服务（供树莓派拉取） ─────────────────────────
+# ── E-ink 渲染（供 ESP32 墨水屏，1-bit BMP/PNG） ───────────
+eink:
+  enabled: true
+  output_path: "output/eink.bmp"  # 同时会生成同名 .png 预览图
+  width: 800                      # 常见墨水屏：800x480(7.5寸) / 400x300(4.2寸) / 640x384(7.5寸V2) / 960x640(10寸)
+  height: 480
+  max_font_size: 72               # 墨水屏建议 60~80，字太小看不清
+  min_font_size: 14
+  margin: 8                       # 屏幕边距
+  padding: 4                      # 词间距
+  rotate: false                   # 墨水屏建议 false（易读），true 则高频词轻微旋转
+  # width/height 改后需同步改 output 尺寸，HTTP 接口也支持 ?w=800&h=480 动态渲染
+
+# ── HTTP 服务（供树莓派/ESP32拉取） ─────────────────────
 server:
   host: "0.0.0.0"
   port: 8765
